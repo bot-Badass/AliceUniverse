@@ -7,10 +7,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
+from app.config import get_settings
 from app.db import SessionLocal
 from app.services.engagement_service import EngagementService, month_start_utc
 
 router = Router()
+settings = get_settings()
 
 REACTION_MAP = {
     "heart": "❤️",
@@ -92,7 +94,7 @@ async def donation_amount_handler(message: Message, state: FSMContext) -> None:
     async with SessionLocal() as session:
         service = EngagementService(session)
         user = await service.ensure_active_user(message.from_user.id)
-        if not user:
+        if not user and message.from_user.id not in settings.super_admins:
             await state.clear()
             await message.answer("Дякуємо! Донати доступні лише для підтверджених учасників.")
             return
@@ -140,7 +142,7 @@ async def reaction_handler(callback: CallbackQuery) -> None:
     async with SessionLocal() as session:
         service = EngagementService(session)
         user = await service.ensure_active_user(callback.from_user.id)
-        if not user:
+        if not user and callback.from_user.id not in settings.super_admins:
             await callback.answer("Лише для підтверджених учасників", show_alert=True)
             return
 
