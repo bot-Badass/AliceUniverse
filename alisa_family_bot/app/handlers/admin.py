@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy import func, select
 from aiogram.types import (
     CallbackQuery,
+    InputMediaPhoto,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -40,6 +42,7 @@ BTN_CANCEL = "❌ Скасувати"
 BTN_SKIP_CAPTION = "➡️ Без опису"
 BTN_SKIP_DESCRIPTION = "➡️ Без опису"
 BTN_SKIP_MEDIA = "➡️ Без фото/відео"
+BTN_MEDIA_DONE = "✅ Готово"
 BTN_TODAY = "📅 Сьогодні"
 BTN_AUTO_HASHTAGS = "🏷 Автохештеги"
 BTN_CUSTOM_ROLE = "✍️ Ввести роль вручну"
@@ -110,6 +113,13 @@ def caption_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def post_media_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=BTN_MEDIA_DONE)], [KeyboardButton(text=BTN_CANCEL)]],
+        resize_keyboard=True,
+    )
+
+
 def moment_description_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=BTN_SKIP_DESCRIPTION)], [KeyboardButton(text=BTN_CANCEL)]],
@@ -119,7 +129,11 @@ def moment_description_keyboard() -> ReplyKeyboardMarkup:
 
 def moment_media_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=BTN_SKIP_MEDIA)], [KeyboardButton(text=BTN_CANCEL)]],
+        keyboard=[
+            [KeyboardButton(text=BTN_MEDIA_DONE)],
+            [KeyboardButton(text=BTN_SKIP_MEDIA)],
+            [KeyboardButton(text=BTN_CANCEL)],
+        ],
         resize_keyboard=True,
     )
 
@@ -435,7 +449,47 @@ async def notify_admins_about_pending(bot, user: User) -> None:
 
 
 async def publish_to_channel(bot, file_id: str, caption: str | None) -> None:
-    await bot.send_photo(chat_id=settings.channel_id, photo=file_id, caption=caption or None)
+    await publish_media(
+        bot=bot,
+        chat_id=settings.channel_id,
+        media_type="photo",
+        file_ids=[file_id],
+        caption=caption,
+    )
+
+
+def encode_scheduled_media_ref(media_type: str, file_ids: list[str]) -> str:
+    return json.dumps({"type": media_type, "ids": file_ids}, ensure_ascii=False)
+
+
+async def publish_media(
+    bot,
+    chat_id: int,
+    media_type: str,
+    file_ids: list[str],
+    caption: str | None,
+) -> None:
+    if not file_ids:
+        await bot.send_message(chat_id=chat_id, text=caption or "Оновлення без медіа")
+        return
+
+    if media_type == "video":
+        await bot.send_video(chat_id=chat_id, video=file_ids[0], caption=caption or None)
+        return
+
+    if len(file_ids) == 1:
+        await bot.send_photo(chat_id=chat_id, photo=file_ids[0], caption=caption or None)
+        return
+
+    media_group = []
+    for idx, fid in enumerate(file_ids):
+        media_group.append(
+            InputMediaPhoto(
+                media=fid,
+                caption=caption if idx == 0 else None,
+            )
+        )
+    await bot.send_media_group(chat_id=chat_id, media=media_group)
 
 
 async def broadcast_memorable_moment(
@@ -445,17 +499,32 @@ async def broadcast_memorable_moment(
     moment_date: date,
     hashtags_text: str,
     media_type: str | None,
-    media_file_id: str | None,
+    media_file_ids: list[str] | None,
     moment_id: int,
 ) -> int:
     text = memorable_moment_text(title, description, moment_date, hashtags_text)
     keyboard = moment_actions_keyboard(moment_id)
+    media_file_ids = media_file_ids or []
 
     try:
-        if media_type == "photo" and media_file_id:
-            await bot.send_photo(chat_id=settings.channel_id, photo=media_file_id, caption=text, reply_markup=keyboard)
-        elif media_type == "video" and media_file_id:
-            await bot.send_video(chat_id=settings.channel_id, video=media_file_id, caption=text, reply_markup=keyboard)
+        if media_type == "photo" and len(media_file_ids) > 1:
+            await publish_media(
+                bot=bot,
+                chat_id=settings.channel_id,
+                media_type="photo",
+                file_ids=media_file_ids,
+                caption=None,
+            )
+            await bot.send_message(chat_id=settings.channel_id, text=text, reply_markup=keyboard)
+        elif media_type == "photo" and media_file_ids:
+            await bot.send_photo(
+                chat_id=settings.channel_id,
+                photo=media_file_ids[0],
+                caption=text,
+                reply_markup=keyboard,
+            )
+        elif media_type == "video" and media_file_ids:
+            await bot.send_video(chat_id=settings.channel_id, video=media_file_ids[0], caption=text, reply_markup=keyboard)
         else:
             await bot.send_message(chat_id=settings.channel_id, text=text, reply_markup=keyboard)
     except Exception:
@@ -468,17 +537,26 @@ async def broadcast_memorable_moment(
     sent = 0
     for user in users:
         try:
-            if media_type == "photo" and media_file_id:
+            if media_type == "photo" and len(media_file_ids) > 1:
+                await publish_media(
+                    bot=bot,
+                    chat_id=user.telegram_id,
+                    media_type="photo",
+                    file_ids=media_file_ids,
+                    caption=None,
+                )
+                await bot.send_message(chat_id=user.telegram_id, text=text, reply_markup=keyboard)
+            elif media_type == "photo" and media_file_ids:
                 await bot.send_photo(
                     chat_id=user.telegram_id,
-                    photo=media_file_id,
+                    photo=media_file_ids[0],
                     caption=text,
                     reply_markup=keyboard,
                 )
-            elif media_type == "video" and media_file_id:
+            elif media_type == "video" and media_file_ids:
                 await bot.send_video(
                     chat_id=user.telegram_id,
-                    video=media_file_id,
+                    video=media_file_ids[0],
                     caption=text,
                     reply_markup=keyboard,
                 )
@@ -865,23 +943,39 @@ async def add_memorable_moment_media_step(message: Message, state: FSMContext) -
         await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
         return
 
-    media_type: str | None = None
-    media_file_id: str | None = None
+    data = await state.get_data()
+    media_type = data.get("moment_media_type")
+    media_file_ids = list(data.get("moment_media_file_ids", []))
 
-    if message.photo:
+    if message.text == BTN_SKIP_MEDIA:
+        await state.update_data(moment_media_type=None, moment_media_file_ids=[])
+    elif message.text == BTN_MEDIA_DONE:
+        if not media_file_ids:
+            await message.answer("Ви ще не додали медіа. Надішліть фото/відео або натисніть 'Без фото/відео'.")
+            return
+    elif message.photo:
+        if media_type == "video":
+            await message.answer("Не можна змішувати фото і відео. Надішліть ✅ Готово або Скасувати.")
+            return
         media_type = "photo"
-        media_file_id = message.photo[-1].file_id
+        media_file_ids.append(message.photo[-1].file_id)
+        await state.update_data(moment_media_type=media_type, moment_media_file_ids=media_file_ids)
+        await message.answer(
+            f"Додано фото: {len(media_file_ids)}. Можете надіслати ще або натиснути 'Готово'.",
+            reply_markup=moment_media_keyboard(),
+        )
+        return
     elif message.video:
+        if media_type == "photo" and media_file_ids:
+            await message.answer("Не можна змішувати фото і відео. Надішліть ✅ Готово або Скасувати.")
+            return
         media_type = "video"
-        media_file_id = message.video.file_id
-    elif message.text == BTN_SKIP_MEDIA:
-        media_type = None
-        media_file_id = None
+        media_file_ids = [message.video.file_id]
+        await state.update_data(moment_media_type=media_type, moment_media_file_ids=media_file_ids)
     else:
         await message.answer("Очікую фото, відео або кнопку 'Без фото/відео'.")
         return
 
-    await state.update_data(moment_media_type=media_type, moment_media_file_id=media_file_id)
     await state.set_state(AdminStates.waiting_moment_date)
     await message.answer(
         "Вкажіть дату у форматі YYYY-MM-DD або DD.MM.YYYY, або натисніть 'Сьогодні'.",
@@ -939,7 +1033,7 @@ async def add_memorable_moment_hashtags_step(message: Message, state: FSMContext
         moment_date = date.today()
 
     media_type = data.get("moment_media_type")
-    media_file_id = data.get("moment_media_file_id")
+    media_file_ids = list(data.get("moment_media_file_ids", []))
 
     manual_hashtags = [] if message.text == BTN_AUTO_HASHTAGS else extract_hashtags(message.text)
     hashtag_text = ensure_hashtags(" ".join(manual_hashtags), extra=["#MemorableMoment"])
@@ -953,7 +1047,7 @@ async def add_memorable_moment_hashtags_step(message: Message, state: FSMContext
             created_by=message.from_user.id,
             hashtags=hashtag_text,
             media_type=media_type,
-            media_file_id=media_file_id,
+            media_file_id=media_file_ids[0] if media_file_ids else None,
         )
 
     sent = await broadcast_memorable_moment(
@@ -963,7 +1057,7 @@ async def add_memorable_moment_hashtags_step(message: Message, state: FSMContext
         moment_date=moment_date,
         hashtags_text=hashtag_text,
         media_type=media_type,
-        media_file_id=media_file_id,
+        media_file_ids=media_file_ids,
         moment_id=moment.id,
     )
 
@@ -1128,21 +1222,60 @@ async def new_post_entry(message: Message, state: FSMContext) -> None:
     if not is_super_admin_message(message):
         return
     await state.set_state(AdminStates.waiting_post_photo)
-    await message.answer("Надішліть фото для нового поста.", reply_markup=cancel_keyboard())
+    await state.update_data(post_media_type=None, post_file_ids=[])
+    await message.answer(
+        "Надішліть одне або кілька фото (або одне відео). Коли завершите, натисніть 'Готово'.",
+        reply_markup=post_media_keyboard(),
+    )
 
 
 @router.message(AdminStates.waiting_post_photo)
 async def new_post_photo_step(message: Message, state: FSMContext) -> None:
     if not is_super_admin_message(message):
         return
-    if not message.photo:
-        await message.answer("Очікую фото. Надішліть зображення або натисніть 'Скасувати'.")
+
+    if message.text == BTN_CANCEL:
+        await state.clear()
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
         return
 
-    file_id = message.photo[-1].file_id
-    await state.update_data(file_id=file_id)
-    await state.set_state(AdminStates.waiting_post_caption)
-    await message.answer("Додайте опис до фото або оберіть 'Без опису'.", reply_markup=caption_keyboard())
+    data = await state.get_data()
+    media_type = data.get("post_media_type")
+    file_ids = list(data.get("post_file_ids", []))
+
+    if message.text == BTN_MEDIA_DONE:
+        if not file_ids:
+            await message.answer("Спочатку додайте фото/відео, потім натискайте 'Готово'.")
+            return
+        await state.set_state(AdminStates.waiting_post_caption)
+        await message.answer("Додайте опис до фото або оберіть 'Без опису'.", reply_markup=caption_keyboard())
+        return
+
+    if message.photo:
+        if media_type == "video":
+            await message.answer("Не можна змішувати фото і відео. Надішліть ✅ Готово або Скасувати.")
+            return
+        media_type = "photo"
+        file_ids.append(message.photo[-1].file_id)
+        await state.update_data(post_media_type=media_type, post_file_ids=file_ids)
+        await message.answer(
+            f"Додано фото: {len(file_ids)}. Можете надіслати ще або натиснути 'Готово'.",
+            reply_markup=post_media_keyboard(),
+        )
+        return
+
+    if message.video:
+        if media_type == "photo" and file_ids:
+            await message.answer("Не можна змішувати фото і відео. Надішліть ✅ Готово або Скасувати.")
+            return
+        media_type = "video"
+        file_ids = [message.video.file_id]
+        await state.update_data(post_media_type=media_type, post_file_ids=file_ids)
+        await state.set_state(AdminStates.waiting_post_caption)
+        await message.answer("Відео додано. Додайте опис або оберіть 'Без опису'.", reply_markup=caption_keyboard())
+        return
+
+    await message.answer("Очікую фото/відео або кнопку 'Готово'.")
 
 
 @router.message(AdminStates.waiting_post_caption)
@@ -1176,13 +1309,20 @@ async def publish_now_handler(callback: CallbackQuery, state: FSMContext) -> Non
         return
 
     data = await state.get_data()
-    file_id = data.get("file_id")
+    media_type = data.get("post_media_type") or "photo"
+    file_ids = list(data.get("post_file_ids", []))
     caption = data.get("caption")
-    if not file_id:
-        await callback.answer("Не знайдено фото", show_alert=True)
+    if not file_ids:
+        await callback.answer("Не знайдено медіа", show_alert=True)
         return
 
-    await publish_to_channel(callback.bot, file_id=file_id, caption=ensure_hashtags(caption))
+    await publish_media(
+        bot=callback.bot,
+        chat_id=settings.channel_id,
+        media_type=media_type,
+        file_ids=file_ids,
+        caption=ensure_hashtags(caption),
+    )
     await state.clear()
 
     if callback.message:
@@ -1243,9 +1383,10 @@ async def post_datetime_step(message: Message, state: FSMContext) -> None:
         return
 
     data = await state.get_data()
-    file_id = data.get("file_id")
+    media_type = data.get("post_media_type") or "photo"
+    file_ids = list(data.get("post_file_ids", []))
     caption = data.get("caption")
-    if not file_id or not message.from_user:
+    if not file_ids or not message.from_user:
         await message.answer("Не знайдено фото для публікації. Запустіть сценарій ще раз.")
         await state.clear()
         return
@@ -1255,7 +1396,7 @@ async def post_datetime_step(message: Message, state: FSMContext) -> None:
     async with SessionLocal() as session:
         service = ScheduledPostService(session)
         post = await service.create_scheduled_post(
-            file_id=file_id,
+            file_id=encode_scheduled_media_ref(media_type=media_type, file_ids=file_ids),
             caption=ensure_hashtags(caption),
             publish_at=publish_at_utc,
             created_by_telegram_id=message.from_user.id,

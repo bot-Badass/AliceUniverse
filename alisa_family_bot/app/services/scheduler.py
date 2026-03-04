@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
+from aiogram.types import InputMediaPhoto
 
 from app.config import get_settings
 from app.db import SessionLocal
@@ -40,7 +42,13 @@ async def process_due_posts(bot: Bot) -> int:
     processed = 0
     for post in due_posts:
         try:
-            await bot.send_photo(chat_id=settings.channel_id, photo=post.file_id, caption=post.caption or None)
+            media_type, file_ids = decode_scheduled_media_ref(post.file_id)
+            await publish_scheduled_media(
+                bot=bot,
+                media_type=media_type,
+                file_ids=file_ids,
+                caption=post.caption or None,
+            )
             async with SessionLocal() as session:
                 service = ScheduledPostService(session)
                 await service.mark_published(post.id, datetime.now(timezone.utc))
@@ -52,6 +60,41 @@ async def process_due_posts(bot: Bot) -> int:
             logger.exception("Failed to publish scheduled post id=%s", post.id)
 
     return processed
+
+
+def decode_scheduled_media_ref(raw: str) -> tuple[str, list[str]]:
+    if raw.startswith("{"):
+        try:
+            payload = json.loads(raw)
+            media_type = payload.get("type", "photo")
+            ids = payload.get("ids") or []
+            ids = [str(x) for x in ids if x]
+            if ids:
+                return media_type, ids
+        except Exception:
+            pass
+    return "photo", [raw]
+
+
+async def publish_scheduled_media(
+    bot: Bot,
+    media_type: str,
+    file_ids: list[str],
+    caption: str | None,
+) -> None:
+    if not file_ids:
+        await bot.send_message(settings.channel_id, caption or "Оновлення без медіа")
+        return
+    if media_type == "video":
+        await bot.send_video(chat_id=settings.channel_id, video=file_ids[0], caption=caption or None)
+        return
+    if len(file_ids) == 1:
+        await bot.send_photo(chat_id=settings.channel_id, photo=file_ids[0], caption=caption or None)
+        return
+    media = []
+    for idx, fid in enumerate(file_ids):
+        media.append(InputMediaPhoto(media=fid, caption=caption if idx == 0 else None))
+    await bot.send_media_group(chat_id=settings.channel_id, media=media)
 
 
 async def scheduler_worker(bot: Bot, interval_seconds: int = 10) -> None:
