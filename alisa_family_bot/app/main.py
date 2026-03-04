@@ -80,8 +80,14 @@ async def run_webhook() -> None:
     bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = await create_dispatcher()
 
-    dp.startup.register(lambda *_: on_startup(bot))
-    dp.shutdown.register(lambda *_: on_shutdown(bot))
+    async def startup_handler(*_) -> None:
+        await on_startup(bot)
+
+    async def shutdown_handler(*_) -> None:
+        await on_shutdown(bot)
+
+    dp.startup.register(startup_handler)
+    dp.shutdown.register(shutdown_handler)
 
     app = web.Application()
     SimpleRequestHandler(
