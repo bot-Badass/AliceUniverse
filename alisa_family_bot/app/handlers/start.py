@@ -36,7 +36,7 @@ async def start_handler(message: Message) -> None:
     if message.from_user.id in settings.super_admins:
         await message.answer(
             "Панель супер-адміна активована.",
-            reply_markup=admin_keyboard(),
+            reply_markup=admin_keyboard(message.from_user.id if message.from_user else None),
         )
         return
 

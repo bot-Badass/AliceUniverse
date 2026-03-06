@@ -140,3 +140,37 @@ class GrowthRecord(Base):
     recorded_on: Mapped[date] = mapped_column(DATE, nullable=False, server_default=func.current_date())
     created_by: Mapped[int] = mapped_column(BIGINT, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class MorningSession(Base):
+    __tablename__ = "morning_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BIGINT, nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", index=True)  # active|done|aborted
+    completed_steps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class MorningStepLog(Base):
+    __tablename__ = "morning_step_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    step_key: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="started")  # started|done|skipped
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MorningStreak(Base):
+    __tablename__ = "morning_streaks"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_morning_streak_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BIGINT, nullable=False, index=True)
+    current_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    best_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_completed_date: Mapped[date | None] = mapped_column(DATE, nullable=True)

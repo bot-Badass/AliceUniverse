@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Set
+from typing import List, Set
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,13 +30,21 @@ class Settings(BaseSettings):
         return value
 
     @property
-    def super_admins(self) -> Set[int]:
-        result = set()
+    def super_admins_list(self) -> List[int]:
+        result: List[int] = []
         for part in self.super_admins_raw.split(","):
             part = part.strip()
             if part:
-                result.add(int(part))
+                result.append(int(part))
         return result
+
+    @property
+    def super_admins(self) -> Set[int]:
+        return set(self.super_admins_list)
+
+    @property
+    def primary_super_admin(self) -> int | None:
+        return self.super_admins_list[0] if self.super_admins_list else None
 
     @property
     def webhook_url(self) -> str | None:

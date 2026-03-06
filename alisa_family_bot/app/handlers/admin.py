@@ -33,6 +33,7 @@ settings = get_settings()
 KYIV_TZ = ZoneInfo("Europe/Kyiv")
 
 BTN_PENDING = "🕓 Очікують підтвердження"
+BTN_MORNING = "🌅 Проснулся"
 BTN_NEW_POST = "🆕 Новий пост"
 BTN_ADD_MOMENT = "✨ Додати памʼятний момент"
 BTN_GROWTH = "📈 Календар розвитку"
@@ -88,13 +89,16 @@ def is_super_admin_callback(callback: CallbackQuery) -> bool:
     return bool(callback.from_user and callback.from_user.id in settings.super_admins)
 
 
-def admin_keyboard() -> ReplyKeyboardMarkup:
+def admin_keyboard(actor_telegram_id: int | None = None) -> ReplyKeyboardMarkup:
+    keyboard = [
+        [KeyboardButton(text=BTN_PENDING), KeyboardButton(text=BTN_NEW_POST)],
+        [KeyboardButton(text=BTN_ADD_MOMENT), KeyboardButton(text=BTN_GROWTH)],
+        [KeyboardButton(text=BTN_SCHEDULED), KeyboardButton(text=BTN_STATS)],
+    ]
+    if actor_telegram_id is not None and actor_telegram_id == settings.primary_super_admin:
+        keyboard.insert(1, [KeyboardButton(text=BTN_MORNING)])
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=BTN_PENDING), KeyboardButton(text=BTN_NEW_POST)],
-            [KeyboardButton(text=BTN_ADD_MOMENT), KeyboardButton(text=BTN_GROWTH)],
-            [KeyboardButton(text=BTN_SCHEDULED), KeyboardButton(text=BTN_STATS)],
-        ],
+        keyboard=keyboard,
         resize_keyboard=True,
     )
 
@@ -577,7 +581,7 @@ async def cancel_flow(message: Message, state: FSMContext) -> None:
     if not is_super_admin_message(message):
         return
     await state.clear()
-    await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+    await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
 
 
 @router.message(F.text == BTN_PENDING)
@@ -585,7 +589,7 @@ async def pending_list_handler(message: Message) -> None:
     if not is_super_admin_message(message):
         return
 
-    await message.answer("Панель заявок:", reply_markup=admin_keyboard())
+    await message.answer("Панель заявок:", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
     await show_pending_card_in_message(message, index=0)
 
 
@@ -622,7 +626,7 @@ async def scheduled_posts_handler(message: Message) -> None:
     if not is_super_admin_message(message):
         return
 
-    await message.answer("Панель запланованих постів:", reply_markup=admin_keyboard())
+    await message.answer("Панель запланованих постів:", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
     await show_scheduled_card_in_message(message, index=0)
 
 
@@ -859,7 +863,7 @@ async def custom_role_submit_handler(message: Message, state: FSMContext) -> Non
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     data = await state.get_data()
@@ -867,7 +871,7 @@ async def custom_role_submit_handler(message: Message, state: FSMContext) -> Non
     index = data.get("custom_role_index", 0)
     if not isinstance(telegram_id, int):
         await state.clear()
-        await message.answer("Не знайдено заявку. Спробуйте ще раз.", reply_markup=admin_keyboard())
+        await message.answer("Не знайдено заявку. Спробуйте ще раз.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     role = message.text.strip()
@@ -879,9 +883,9 @@ async def custom_role_submit_handler(message: Message, state: FSMContext) -> Non
 
     user = await approve_user_with_role(bot=message.bot, telegram_id=telegram_id, role=role)
     if not user:
-        await message.answer("Користувача не знайдено.", reply_markup=admin_keyboard())
+        await message.answer("Користувача не знайдено.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
-    await message.answer(f"✅ Користувача підтверджено з роллю: {role}", reply_markup=admin_keyboard())
+    await message.answer(f"✅ Користувача підтверджено з роллю: {role}", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
     await message.answer("Підказка: у панелі заявок натисніть 🔄 Оновити, щоб прибрати оброблену заявку.")
 
 
@@ -902,7 +906,7 @@ async def add_memorable_moment_title_step(message: Message, state: FSMContext) -
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     await state.update_data(moment_title=message.text.strip())
@@ -922,7 +926,7 @@ async def add_memorable_moment_description_step(message: Message, state: FSMCont
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     description = None if message.text == BTN_SKIP_DESCRIPTION else message.text.strip()
@@ -940,7 +944,7 @@ async def add_memorable_moment_media_step(message: Message, state: FSMContext) -
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     data = await state.get_data()
@@ -992,7 +996,7 @@ async def add_memorable_moment_date_step(message: Message, state: FSMContext) ->
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     moment_date = date.today() if message.text == BTN_TODAY else parse_moment_date(message.text)
@@ -1016,14 +1020,14 @@ async def add_memorable_moment_hashtags_step(message: Message, state: FSMContext
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     data = await state.get_data()
     title = str(data.get("moment_title", "")).strip()
     if not title:
         await state.clear()
-        await message.answer("Не знайдено назву. Запустіть сценарій ще раз.", reply_markup=admin_keyboard())
+        await message.answer("Не знайдено назву. Запустіть сценарій ще раз.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     description = data.get("moment_description")
@@ -1066,7 +1070,7 @@ async def add_memorable_moment_hashtags_step(message: Message, state: FSMContext
         "✅ Памʼятний момент додано.\n"
         f"ID: <code>{moment.id}</code>\n"
         f"Розіслано: {sent} користувачам",
-        reply_markup=admin_keyboard(),
+        reply_markup=admin_keyboard(message.from_user.id if message.from_user else None),
     )
 
 
@@ -1098,14 +1102,14 @@ async def growth_value_submit(message: Message, state: FSMContext) -> None:
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     data = await state.get_data()
     mode = data.get("growth_mode")
     if mode not in {"weight", "height"}:
         await state.clear()
-        await message.answer("Не знайдено тип вимірювання. Спробуйте ще раз.", reply_markup=admin_keyboard())
+        await message.answer("Не знайдено тип вимірювання. Спробуйте ще раз.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     try:
@@ -1158,7 +1162,7 @@ async def growth_value_submit(message: Message, state: FSMContext) -> None:
     except Exception:
         pass
 
-    await message.answer(admin_text, reply_markup=admin_keyboard())
+    await message.answer(admin_text, reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
 
 
 @router.message(F.text == BTN_GROWTH_EVENT)
@@ -1178,7 +1182,7 @@ async def growth_event_title_submit(message: Message, state: FSMContext) -> None
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
     await state.update_data(growth_event_title=message.text.strip())
     await state.set_state(AdminStates.waiting_growth_event_note)
@@ -1191,13 +1195,13 @@ async def growth_event_note_submit(message: Message, state: FSMContext) -> None:
         return
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
     data = await state.get_data()
     title = str(data.get("growth_event_title", "")).strip()
     if not title:
         await state.clear()
-        await message.answer("Не знайдено назву події. Спробуйте ще раз.", reply_markup=admin_keyboard())
+        await message.answer("Не знайдено назву події. Спробуйте ще раз.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
     note = None if message.text.strip() == "-" else message.text.strip()
     async with SessionLocal() as session:
@@ -1214,7 +1218,7 @@ async def growth_event_note_submit(message: Message, state: FSMContext) -> None:
         await message.bot.send_message(settings.channel_id, channel_text)
     except Exception:
         pass
-    await message.answer("✅ Подію збережено і опубліковано в канал.", reply_markup=admin_keyboard())
+    await message.answer("✅ Подію збережено і опубліковано в канал.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
 
 
 @router.message(F.text == BTN_NEW_POST)
@@ -1236,7 +1240,7 @@ async def new_post_photo_step(message: Message, state: FSMContext) -> None:
 
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     data = await state.get_data()
@@ -1288,7 +1292,7 @@ async def new_post_caption_step(message: Message, state: FSMContext) -> None:
 
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     raw_caption = None if message.text == BTN_SKIP_CAPTION else message.text.strip()
@@ -1327,7 +1331,10 @@ async def publish_now_handler(callback: CallbackQuery, state: FSMContext) -> Non
 
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("✅ Пост опубліковано в канал.", reply_markup=admin_keyboard())
+        await callback.message.answer(
+            "✅ Пост опубліковано в канал.",
+            reply_markup=admin_keyboard(callback.from_user.id if callback.from_user else None),
+        )
     await callback.answer()
 
 
@@ -1367,7 +1374,7 @@ async def post_datetime_step(message: Message, state: FSMContext) -> None:
 
     if message.text == BTN_CANCEL:
         await state.clear()
-        await message.answer("Дію скасовано.", reply_markup=admin_keyboard())
+        await message.answer("Дію скасовано.", reply_markup=admin_keyboard(message.from_user.id if message.from_user else None))
         return
 
     publish_at_local = parse_publish_datetime(message.text)
@@ -1407,7 +1414,7 @@ async def post_datetime_step(message: Message, state: FSMContext) -> None:
         "✅ Публікацію заплановано\n"
         f"ID: <code>{post.id}</code>\n"
         f"Коли: {publish_at_local.strftime('%d.%m.%Y %H:%M')} (Europe/Kyiv)",
-        reply_markup=admin_keyboard(),
+        reply_markup=admin_keyboard(message.from_user.id if message.from_user else None),
     )
 
 
@@ -1429,5 +1436,5 @@ async def stats_handler(message: Message) -> None:
         f"Очікують підтвердження: {stats.pending_users}\n"
         f"Памʼятних моментів: {moments_count or 0}\n"
         f"Донати: {int(total_donations or 0)} UAH",
-        reply_markup=admin_keyboard(),
+        reply_markup=admin_keyboard(message.from_user.id if message.from_user else None),
     )

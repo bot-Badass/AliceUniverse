@@ -13,7 +13,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 
 from app.config import get_settings
 from app.db import engine
-from app.handlers import admin, channel, engagement, start
+from app.handlers import admin, channel, engagement, morning, start
 from app.models import Base
 from app.services.scheduler import scheduler_worker
 
@@ -59,6 +59,7 @@ async def on_shutdown(bot: Bot) -> None:
 async def create_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(start.router)
+    dp.include_router(morning.router)
     dp.include_router(admin.router)
     dp.include_router(channel.router)
     dp.include_router(engagement.router)
