@@ -4,6 +4,9 @@ import aiohttp
 from bs4 import BeautifulSoup
 import json
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class CarInfo:
@@ -38,6 +41,7 @@ class AutoRiaParser:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 async with session.get(url, timeout=self.timeout) as response:
                     if response.status != 200:
+                        logger.warning("AutoRia parse failed: status=%s url=%s", response.status, url)
                         raise ParseError(f"Сайт недоступен, статус: {response.status}")
                     
                     html = await response.text()
@@ -168,8 +172,10 @@ class AutoRiaParser:
                     )
 
         except aiohttp.ClientError as e:
+            logger.exception("AutoRia parse network error url=%s", url)
             raise ParseError(f"Ошибка сети: {e}")
         except Exception as e:
+            logger.exception("AutoRia parse error url=%s", url)
             raise ParseError(f"Не удалось распознать объявление: {e}")
 
     async def _fetch_phone_data(
@@ -484,6 +490,7 @@ class OlxParser:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 async with session.get(url, timeout=self.timeout) as response:
                     if response.status != 200:
+                        logger.warning("OLX parse failed: status=%s url=%s", response.status, url)
                         raise ParseError(f"Сайт недоступен, статус: {response.status}")
 
                     html = await response.text()
@@ -650,8 +657,10 @@ class OlxParser:
                         phone_hidden=phone is None,
                     )
         except aiohttp.ClientError as e:
+            logger.exception("OLX parse network error url=%s", url)
             raise ParseError(f"Ошибка сети: {e}")
         except Exception as e:
+            logger.exception("OLX parse error url=%s", url)
             raise ParseError(f"Не удалось распознать объявление: {e}")
 
 
