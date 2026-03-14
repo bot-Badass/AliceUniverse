@@ -16,6 +16,8 @@ from app.db import engine
 from app.handlers import admin, channel, engagement, morning, start
 from app.models import Base
 from app.services.scheduler import scheduler_worker
+from app.crm import crm_router
+from app.crm.models import init_crm_tables
 
 logging.basicConfig(level=logging.INFO)
 
@@ -28,6 +30,8 @@ async def on_startup(bot: Bot) -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    await init_crm_tables(engine)
 
     await bot.set_my_commands(
         [
@@ -63,6 +67,7 @@ async def create_dispatcher() -> Dispatcher:
     dp.include_router(admin.router)
     dp.include_router(channel.router)
     dp.include_router(engagement.router)
+    dp.include_router(crm_router)
     return dp
 
 

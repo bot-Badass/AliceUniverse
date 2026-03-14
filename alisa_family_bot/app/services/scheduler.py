@@ -14,6 +14,8 @@ from app.db import SessionLocal
 from app.services.engagement_service import EngagementService, month_start_utc
 from app.services.growth_service import GrowthService
 from app.services.channel_service import ScheduledPostService
+from app.crm.services.reminder_service import get_due_reminders, mark_reminder_completed
+from app.crm.handlers.reminders import send_reminder
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -30,7 +32,7 @@ async def requeue_processing_posts() -> int:
 
 
 async def process_due_posts(bot: Bot) -> int:
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.utcnow()
 
     async with SessionLocal() as session:
         service = ScheduledPostService(session)
@@ -107,9 +109,23 @@ async def scheduler_worker(bot: Bot, interval_seconds: int = 10) -> None:
             await process_due_posts(bot)
             await process_growth_reminders(bot)
             await process_monthly_top_donators(bot)
+            await process_crm_reminders(bot)
         except Exception:
             logger.exception("Scheduler worker iteration failed")
         await asyncio.sleep(interval_seconds)
+
+
+async def process_crm_reminders(bot: Bot) -> None:
+    now_utc = datetime.utcnow()
+    reminders = await get_due_reminders(now_utc)
+    if not reminders:
+        return
+    for reminder in reminders:
+        try:
+            await send_reminder(bot, reminder)
+            await mark_reminder_completed(reminder.id)
+        except Exception:
+            logger.exception("Failed to send CRM reminder id=%s", reminder.id)
 
 
 async def process_growth_reminders(bot: Bot) -> None:

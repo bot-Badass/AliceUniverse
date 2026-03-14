@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     webhook_base_url: str | None = Field(default=None, alias="WEBHOOK_BASE_URL")
     webhook_path: str = Field(default="/webhook", alias="WEBHOOK_PATH")
     webhook_secret: str | None = Field(default=None, alias="WEBHOOK_SECRET")
+    local_polling: bool = Field(default=False, alias="LOCAL_POLLING")
     host: str = Field(default="0.0.0.0", alias="HOST")
     port: int = Field(default=8080, alias="PORT")
 
@@ -48,6 +49,8 @@ class Settings(BaseSettings):
 
     @property
     def webhook_url(self) -> str | None:
+        if self.local_polling:
+            return None
         if not self.webhook_base_url:
             return None
         return f"{self.webhook_base_url.rstrip('/')}{self.webhook_path}"
