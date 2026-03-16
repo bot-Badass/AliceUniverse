@@ -18,12 +18,15 @@ def get_card_edit_keyboard() -> InlineKeyboardMarkup:
 def get_call_result_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [
+            InlineKeyboardButton(text="🤔 Думает", callback_data="callres:thinking"),
             InlineKeyboardButton(text="⏰ Перезв.", callback_data="callres:callback_scheduled"),
+        ],
+        [
             InlineKeyboardButton(text="📅 Встреча", callback_data="callres:appointment_set"),
+            InlineKeyboardButton(text="📵 Нет ответа", callback_data="callres:no_answer"),
         ],
         [
             InlineKeyboardButton(text="❌ Отказ", callback_data="callres:rejected"),
-            InlineKeyboardButton(text="📵 Нет ответа", callback_data="callres:no_answer"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -49,6 +52,7 @@ def get_work_card_keyboard(
     with_nav: bool = False,
     phone_url: str | None = None,
     has_details: bool = False,
+    show_edit: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = []
     if phone_url:
@@ -61,6 +65,8 @@ def get_work_card_keyboard(
     )
     if has_details:
         rows.append([InlineKeyboardButton(text="📋 Подробнее", callback_data="card:details")])
+    if show_edit:
+        rows.append([InlineKeyboardButton(text="✏️ Редактировать", callback_data="card:edit")])
     if with_nav:
         rows.append(
             [

@@ -18,6 +18,7 @@ MENU_COMMANDS = {
     "📋 Очередь на звонок",
     "⏰ Напоминания",
     "🏷 База в продаже",
+    "🤔 Думает",
     "📊 CRM Стат",
     "📊 Статистика CRM",
 }
@@ -67,6 +68,7 @@ def _build_tel_url(phone: str | None) -> str | None:
 def _allowed_statuses(current: str) -> list[str]:
     if current in {"new", "thinking", "callback_scheduled", "no_answer"}:
         return [
+            "thinking",
             "callback_scheduled",
             "appointment_set",
             "rejected",
@@ -158,6 +160,7 @@ async def show_work_card(
         with_nav=with_nav,
         phone_url=phone_url,
         has_details=has_details,
+        show_edit=(lead.source == "olx"),
     )
     if replace:
         try:
@@ -367,8 +370,8 @@ async def card_set_status(callback_query: types.CallbackQuery, state: FSMContext
     if status not in _allowed_statuses(lead.status):
         await callback_query.answer("Этот статус сейчас недоступен", show_alert=True)
         return
-    if status in {"thinking", "appointment_set", "callback_scheduled"}:
-        await state.set_state(WorkCardStates.thinking_set_date if status == "thinking" else WorkCardStates.appointment_set_date)
+    if status in {"appointment_set", "callback_scheduled"}:
+        await state.set_state(WorkCardStates.appointment_set_date)
         await state.update_data(pending_status=status, lead_id=int(lead_id))
         await callback_query.message.answer(
             "Когда перезвонить? Примеры: \"завтра 15:00\", \"15.03 11:00\", \"пн 10:30\", \"сегодня вечером\"."
@@ -502,8 +505,8 @@ async def call_result_button(callback_query: types.CallbackQuery, state: FSMCont
         await callback_query.answer("Этот статус сейчас недоступен", show_alert=True)
         return
 
-    if status in {"thinking", "appointment_set", "callback_scheduled"}:
-        await state.set_state(WorkCardStates.thinking_set_date if status == "thinking" else WorkCardStates.appointment_set_date)
+    if status in {"appointment_set", "callback_scheduled"}:
+        await state.set_state(WorkCardStates.appointment_set_date)
         await state.update_data(pending_status=status, lead_id=int(lead_id))
         await callback_query.message.answer(
             "Коли передзвонити? Приклади: \"завтра 15:00\", \"15.03 11:00\", \"пн 10:30\", \"сьогодні ввечері\"."

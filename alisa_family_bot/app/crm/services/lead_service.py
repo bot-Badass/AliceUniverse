@@ -56,6 +56,8 @@ async def create_lead(car_info: CarInfo, url: str, manager_id: int) -> tuple[Lea
         return new_lead, True
 
 def _order_by_sort(sort_by: str):
+    if sort_by == "created":
+        return [Lead.created_at.desc()]
     if sort_by == "price":
         return [Lead.car_price.asc().nulls_last()]
     if sort_by == "year":
@@ -63,7 +65,7 @@ def _order_by_sort(sort_by: str):
     return [Lead.car_brand.asc().nulls_last(), Lead.car_model.asc().nulls_last()]
 
 
-async def get_leads_for_pipeline(page: int = 0, page_size: int = 10, sort_by: str = "brand") -> List[Lead]:
+async def get_leads_for_pipeline(page: int = 0, page_size: int = 10, sort_by: str = "created") -> List[Lead]:
     async with AsyncSession(engine) as session:
         stmt = (
             select(Lead)
@@ -75,11 +77,22 @@ async def get_leads_for_pipeline(page: int = 0, page_size: int = 10, sort_by: st
         result = await session.execute(stmt)
         return result.scalars().all()
 
+
+async def get_lead_ids_for_pipeline(sort_by: str = "created") -> list[int]:
+    async with AsyncSession(engine) as session:
+        stmt = (
+            select(Lead.id)
+            .where(Lead.status == "new")
+            .order_by(*_order_by_sort(sort_by))
+        )
+        result = await session.execute(stmt)
+        return [row[0] for row in result.all()]
+
 async def get_lead_by_id(lead_id: int) -> Optional[Lead]:
     async with AsyncSession(engine) as session:
         return await session.get(Lead, lead_id)
 
-async def get_first_lead_from_pipeline(sort_by: str = "brand") -> Optional[Lead]:
+async def get_first_lead_from_pipeline(sort_by: str = "created") -> Optional[Lead]:
     leads = await get_leads_for_pipeline(page=0, page_size=1, sort_by=sort_by)
     return leads[0] if leads else None
 
@@ -97,7 +110,7 @@ async def get_leads_for_sale(page: int = 0, page_size: int = 10, sort_by: str = 
         return result.scalars().all()
 
 
-async def get_leads_for_no_answer(page: int = 0, page_size: int = 10, sort_by: str = "brand") -> List[Lead]:
+async def get_leads_for_no_answer(page: int = 0, page_size: int = 10, sort_by: str = "created") -> List[Lead]:
     async with AsyncSession(engine) as session:
         stmt = (
             select(Lead)
@@ -108,6 +121,39 @@ async def get_leads_for_no_answer(page: int = 0, page_size: int = 10, sort_by: s
         )
         result = await session.execute(stmt)
         return result.scalars().all()
+
+async def get_leads_for_thinking(page: int = 0, page_size: int = 10, sort_by: str = "created") -> List[Lead]:
+    async with AsyncSession(engine) as session:
+        stmt = (
+            select(Lead)
+            .where(Lead.status == "thinking")
+            .order_by(*_order_by_sort(sort_by))
+            .offset(page * page_size)
+            .limit(page_size)
+        )
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
+
+async def get_lead_ids_for_no_answer(sort_by: str = "created") -> list[int]:
+    async with AsyncSession(engine) as session:
+        stmt = (
+            select(Lead.id)
+            .where(Lead.status == "no_answer")
+            .order_by(*_order_by_sort(sort_by))
+        )
+        result = await session.execute(stmt)
+        return [row[0] for row in result.all()]
+
+async def get_lead_ids_for_thinking(sort_by: str = "created") -> list[int]:
+    async with AsyncSession(engine) as session:
+        stmt = (
+            select(Lead.id)
+            .where(Lead.status == "thinking")
+            .order_by(*_order_by_sort(sort_by))
+        )
+        result = await session.execute(stmt)
+        return [row[0] for row in result.all()]
 
 
 def _extract_search_terms(query: str) -> tuple[list[str], list[int], list[int]]:

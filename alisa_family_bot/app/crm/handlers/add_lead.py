@@ -1,6 +1,6 @@
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
-from app.crm.services.parser import parse_auto_ria, parse_olx, ParseError, CarInfo
+from app.crm.services.parser import parse_auto_ria, ParseError, CarInfo
 from app.crm.services import lead_service
 from app.crm.handlers.work_card import show_work_card
 from app.crm.states import AddLeadStates
@@ -74,24 +74,33 @@ async def process_olx_url(message: types.Message, state: FSMContext):
         return
 
     url = match.group(0)
-    await message.answer("🔍 Парсю дані з OLX...")
+    await message.answer("🔗 Зберігаю посилання OLX...")
 
     try:
-        car_info = await parse_olx(url)
+        car_info = CarInfo(
+            source="olx",
+            brand="OLX",
+            model="Ссылка",
+            year=None,
+            price=0,
+            currency="USD",
+            mileage=None,
+            location=None,
+            vin=None,
+            photos=[],
+            description=None,
+            phone=None,
+            seller_name=None,
+            phone_hidden=True,
+        )
         lead, created = await lead_service.create_lead(car_info, url, message.from_user.id)
         if not created:
             status_label = STATUS_LABELS.get(lead.status, lead.status)
             await message.answer(f"⚠️ Это авто уже в базе (статус: {status_label}).")
         else:
-            await message.answer("✅ Авто додано в базу на прозвон.")
+            await message.answer("✅ Посилання додано. Заповніть дані в картці вручну.")
     except ParseError as e:
-        err = str(e)
-        if "Сайт недоступен" in err:
-            await message.answer("❌ Не удалось открыть ссылку. Попробуйте позже или добавьте вручную.")
-        elif "Не удалось распознать" in err:
-            await message.answer("❌ Не удалось распознать объявление. Проверьте ссылку или добавьте вручную.")
-        else:
-            await message.answer(f"❌ Помилка парсингу: {e}")
+        await message.answer(f"❌ Помилка: {e}")
     finally:
         await state.clear()
 
