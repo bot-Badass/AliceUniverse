@@ -1,6 +1,7 @@
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 from app.crm.services import lead_service
+from app.crm.models import Lead
 from app.crm.keyboards.pipeline import get_pipeline_keyboard, get_no_answer_keyboard, get_thinking_keyboard
 from app.crm.config import crm_config
 from app.crm.utils.helpers import is_primary_super_admin
