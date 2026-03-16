@@ -295,14 +295,46 @@ async def card_edit(callback_query: types.CallbackQuery, state: FSMContext):
     if not is_primary_super_admin(callback_query.from_user.id if callback_query.from_user else None):
         return
     await state.set_state(WorkCardStates.edit_field)
-    await callback_query.message.answer("Что редактируем?", reply_markup=get_card_edit_keyboard())
+    await callback_query.message.edit_reply_markup(reply_markup=get_card_edit_keyboard())
     await callback_query.answer()
 
 
 @router.callback_query(F.data.startswith("cardedit:"), WorkCardStates.edit_field)
 async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContext):
     field = callback_query.data.split(":")[-1]
+    if field == "cancel":
+        data = await state.get_data()
+        lead_id = data.get("lead_id")
+        list_ids = data.get("list_ids") or []
+        list_index = data.get("list_index")
+        lead = await lead_service.get_lead_by_id(int(lead_id)) if lead_id else None
+        if lead:
+            has_details = bool(lead.car_description or lead.car_photos)
+            keyboard = get_work_card_keyboard(
+                with_nav=bool(list_ids and list_index is not None),
+                phone_url=None,
+                has_details=has_details,
+                show_edit=(lead.source == "olx"),
+            )
+            await callback_query.message.edit_reply_markup(reply_markup=keyboard)
+        await state.set_state(WorkCardStates.in_call)
+        await callback_query.answer()
+        return
     if field == "back":
+        data = await state.get_data()
+        lead_id = data.get("lead_id")
+        list_ids = data.get("list_ids") or []
+        list_index = data.get("list_index")
+        lead = await lead_service.get_lead_by_id(int(lead_id)) if lead_id else None
+        if lead:
+            has_details = bool(lead.car_description or lead.car_photos)
+            keyboard = get_work_card_keyboard(
+                with_nav=bool(list_ids and list_index is not None),
+                phone_url=None,
+                has_details=has_details,
+                show_edit=(lead.source == "olx"),
+            )
+            await callback_query.message.edit_reply_markup(reply_markup=keyboard)
         await state.set_state(WorkCardStates.in_call)
         await callback_query.answer()
         return

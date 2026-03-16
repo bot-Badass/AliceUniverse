@@ -10,7 +10,10 @@ def get_card_edit_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📍 Город", callback_data="cardedit:location")],
         [InlineKeyboardButton(text="👤 Имя владельца", callback_data="cardedit:owner")],
         [InlineKeyboardButton(text="📞 Телефон", callback_data="cardedit:phone")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="cardedit:back")],
+        [
+            InlineKeyboardButton(text="✖️ Отмена", callback_data="cardedit:cancel"),
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="cardedit:back"),
+        ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
