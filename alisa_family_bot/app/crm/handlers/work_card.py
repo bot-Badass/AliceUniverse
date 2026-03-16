@@ -170,15 +170,17 @@ async def show_work_card(
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
+            await state.update_data(card_message_id=message.message_id, card_chat_id=message.chat.id)
             return
         except Exception:
             pass
-    await message.answer(
+    sent = await message.answer(
         text,
         reply_markup=keyboard,
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
+    await state.update_data(card_message_id=sent.message_id, card_chat_id=sent.chat.id)
 
 
 @router.callback_query(F.data == "card:next_queue")
@@ -295,7 +297,14 @@ async def card_edit(callback_query: types.CallbackQuery, state: FSMContext):
     if not is_primary_super_admin(callback_query.from_user.id if callback_query.from_user else None):
         return
     await state.set_state(WorkCardStates.edit_field)
-    await callback_query.message.edit_reply_markup(reply_markup=get_card_edit_keyboard())
+    data = await state.get_data()
+    msg_id = data.get("card_message_id") or callback_query.message.message_id
+    chat_id = data.get("card_chat_id") or callback_query.message.chat.id
+    await callback_query.message.bot.edit_message_reply_markup(
+        chat_id=chat_id,
+        message_id=msg_id,
+        reply_markup=get_card_edit_keyboard(),
+    )
     await callback_query.answer()
 
 
@@ -316,26 +325,26 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
                 has_details=has_details,
                 show_edit=(lead.source == "olx"),
             )
-            await callback_query.message.edit_reply_markup(reply_markup=keyboard)
+            msg_id = data.get("card_message_id") or callback_query.message.message_id
+            chat_id = data.get("card_chat_id") or callback_query.message.chat.id
+            await callback_query.message.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=msg_id,
+                reply_markup=keyboard,
+            )
         await state.set_state(WorkCardStates.in_call)
         await callback_query.answer()
         return
     if field == "back":
         data = await state.get_data()
-        lead_id = data.get("lead_id")
-        list_ids = data.get("list_ids") or []
-        list_index = data.get("list_index")
-        lead = await lead_service.get_lead_by_id(int(lead_id)) if lead_id else None
-        if lead:
-            has_details = bool(lead.car_description or lead.car_photos)
-            keyboard = get_work_card_keyboard(
-                with_nav=bool(list_ids and list_index is not None),
-                phone_url=None,
-                has_details=has_details,
-                show_edit=(lead.source == "olx"),
-            )
-            await callback_query.message.edit_reply_markup(reply_markup=keyboard)
-        await state.set_state(WorkCardStates.in_call)
+        msg_id = data.get("card_message_id") or callback_query.message.message_id
+        chat_id = data.get("card_chat_id") or callback_query.message.chat.id
+        await callback_query.message.bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=msg_id,
+            reply_markup=get_card_edit_keyboard(),
+        )
+        await state.set_state(WorkCardStates.edit_field)
         await callback_query.answer()
         return
     await state.set_state(WorkCardStates.edit_value)
@@ -379,10 +388,19 @@ async def card_edit_value(message: types.Message, state: FSMContext):
 
     if fields:
         await lead_service.update_lead_fields(int(lead_id), **fields)
-        await message.answer("Данные обновлены.")
+        data = await state.get_data()
+        msg_id = data.get("card_message_id")
+        chat_id = data.get("card_chat_id")
+        if msg_id and chat_id:
+            await message.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=msg_id,
+                reply_markup=get_card_edit_keyboard(),
+            )
+        await message.answer("✅ Данные обновлены. Можешь выбрать следующее поле.")
     else:
         await message.answer("Не удалось обновить поле.")
-    await state.set_state(WorkCardStates.in_call)
+    await state.set_state(WorkCardStates.edit_field)
 
 
 @router.callback_query(F.data.startswith("card:status:"))
