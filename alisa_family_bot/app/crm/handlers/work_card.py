@@ -10,6 +10,7 @@ from app.crm.services import reminder_service
 from app.crm.states import WorkCardStates
 from app.crm.utils.helpers import is_primary_super_admin, parse_human_datetime, to_utc, KYIV_TZ
 from app.crm.constants import STATUS_LABELS
+from aiogram.exceptions import TelegramBadRequest
 
 router = Router()
 
@@ -300,11 +301,14 @@ async def card_edit(callback_query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     msg_id = data.get("card_message_id") or callback_query.message.message_id
     chat_id = data.get("card_chat_id") or callback_query.message.chat.id
-    await callback_query.message.bot.edit_message_reply_markup(
-        chat_id=chat_id,
-        message_id=msg_id,
-        reply_markup=get_card_edit_keyboard(),
-    )
+    try:
+        await callback_query.message.bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=msg_id,
+            reply_markup=get_card_edit_keyboard(),
+        )
+    except TelegramBadRequest:
+        pass
     await callback_query.answer()
 
 
@@ -327,11 +331,14 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
             )
             msg_id = data.get("card_message_id") or callback_query.message.message_id
             chat_id = data.get("card_chat_id") or callback_query.message.chat.id
-            await callback_query.message.bot.edit_message_reply_markup(
-                chat_id=chat_id,
-                message_id=msg_id,
-                reply_markup=keyboard,
-            )
+            try:
+                await callback_query.message.bot.edit_message_reply_markup(
+                    chat_id=chat_id,
+                    message_id=msg_id,
+                    reply_markup=keyboard,
+                )
+            except TelegramBadRequest:
+                pass
         await state.set_state(WorkCardStates.in_call)
         await callback_query.answer()
         return
@@ -339,11 +346,14 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
         data = await state.get_data()
         msg_id = data.get("card_message_id") or callback_query.message.message_id
         chat_id = data.get("card_chat_id") or callback_query.message.chat.id
-        await callback_query.message.bot.edit_message_reply_markup(
-            chat_id=chat_id,
-            message_id=msg_id,
-            reply_markup=get_card_edit_keyboard(),
-        )
+        try:
+            await callback_query.message.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=msg_id,
+                reply_markup=get_card_edit_keyboard(),
+            )
+        except TelegramBadRequest:
+            pass
         await state.set_state(WorkCardStates.edit_field)
         await callback_query.answer()
         return
@@ -392,11 +402,14 @@ async def card_edit_value(message: types.Message, state: FSMContext):
         msg_id = data.get("card_message_id")
         chat_id = data.get("card_chat_id")
         if msg_id and chat_id:
-            await message.bot.edit_message_reply_markup(
-                chat_id=chat_id,
-                message_id=msg_id,
-                reply_markup=get_card_edit_keyboard(),
-            )
+            try:
+                await message.bot.edit_message_reply_markup(
+                    chat_id=chat_id,
+                    message_id=msg_id,
+                    reply_markup=get_card_edit_keyboard(),
+                )
+            except TelegramBadRequest:
+                pass
         await message.answer("✅ Данные обновлены. Можешь выбрать следующее поле.")
     else:
         await message.answer("Не удалось обновить поле.")
