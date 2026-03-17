@@ -1,5 +1,6 @@
 from aiogram import Router, F, types
 import re
+from datetime import datetime, timezone
 from aiogram.types import InputMediaPhoto
 from aiogram.fsm.context import FSMContext
 from app.crm.models import Lead
@@ -456,7 +457,12 @@ async def card_edit_value(message: types.Message, state: FSMContext):
     if lead:
         # Create a temporary message object to pass to show_work_card
         # This is needed because we deleted the user's message
-        temp_message = types.Message(message_id=data.get("card_message_id"), chat=types.Chat(id=data.get("card_chat_id"), type="private"), from_user=message.from_user)
+        temp_message = types.Message(
+            message_id=data.get("card_message_id"),
+            chat=types.Chat(id=data.get("card_chat_id"), type="private"),
+            from_user=message.from_user,
+            date=datetime.now(timezone.utc)
+        )
         await show_work_card(
             temp_message,
             state,

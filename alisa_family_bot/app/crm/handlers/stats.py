@@ -21,14 +21,25 @@ async def stats_handler(message: types.Message, state: FSMContext):
         successful = stats["successful_calls"]
         success_pct = int((successful / total) * 100) if total else 0
         conversion = int((stats["listed"] / total) * 1000) / 10 if total else 0.0
+
+        details = [
+            f"🤔 Думает: {stats['thinking']}" if stats.get('thinking') else None,
+            f"📅 Встреч назначено: {stats['appointments']}" if stats.get('appointments') else None,
+            f"⏰ Перезвонить: {stats['callback_scheduled']}" if stats.get('callback_scheduled') else None,
+            f"🏆 Поставлено авто: {stats['listed']}" if stats.get('listed') else None,
+            f"💰 Продано: {stats['sold']}" if stats.get('sold') else None,
+            f"↩️ Возвращено: {stats['returned']}" if stats.get('returned') else None,
+            f"📝 Заметок: {stats['note']}" if stats.get('note') else None,
+            f"❌ Отказов: {stats['rejected']}" if stats.get('rejected') else None,
+        ]
+
+        details_text = "\n".join(filter(None, details))
+
         return (
             f"<b>{title}</b>\n"
             f"📞 Звонков: {total}\n"
             f"✅ Успешных дозвонов: {successful} ({success_pct}%)\n"
-            f"🤔 Думает: {stats['thinking']}\n"
-            f"📅 Встреч назначено: {stats['appointments']}\n"
-            f"🏆 Поставлено авто: {stats['listed']}\n"
-            f"❌ Отказов: {stats['rejected']}\n"
+            f"{details_text}\n"
             f"Конверсия: {conversion}% ({stats['listed']}/{total})"
         )
 
