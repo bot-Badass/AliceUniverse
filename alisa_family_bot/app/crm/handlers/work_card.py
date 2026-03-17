@@ -1,4 +1,4 @@
-from aiogram import Router, F, types
+from aiogram import Router, F, types, Bot
 import re
 from datetime import datetime, timezone
 from aiogram.types import InputMediaPhoto
@@ -112,6 +112,7 @@ async def show_work_card(
     list_index: int | None = None,
     list_type: str | None = None,
     replace: bool = False,
+    bot: Bot | None = None,
 ):
     await state.set_state(WorkCardStates.in_call)
     await state.update_data(lead_id=lead.id, lead_status=lead.status)
@@ -164,19 +165,23 @@ async def show_work_card(
         has_details=has_details,
         show_edit=(lead.source == "olx"),
     )
+    bot_instance = bot or message.bot
     if replace:
         try:
-            await message.edit_text(
+            await bot_instance.edit_message_text(
                 text,
+                chat_id=message.chat.id,
+                message_id=message.message_id,
                 reply_markup=keyboard,
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
             await state.update_data(card_message_id=message.message_id, card_chat_id=message.chat.id)
             return
-        except Exception:
+        except TelegramBadRequest:
             pass
-    sent = await message.answer(
+    sent = await bot_instance.send_message(
+        chat_id=message.chat.id,
         text,
         reply_markup=keyboard,
         parse_mode="HTML",
@@ -471,6 +476,7 @@ async def card_edit_value(message: types.Message, state: FSMContext):
             list_index=data.get("list_index"),
             list_type=data.get("list_type"),
             replace=True,
+            bot=message.bot,
         )
     
     # After showing the card, switch back to the edit keyboard

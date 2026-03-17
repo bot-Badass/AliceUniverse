@@ -52,14 +52,29 @@ async def process_url(message: types.Message, state: FSMContext):
         else:
             await message.answer("✅ Авто додано в базу на прозвон.")
 
-    except ParseError as e:
-        err = str(e)
-        if "Сайт недоступен" in err:
-            await message.answer("❌ Не удалось открыть ссылку. Попробуйте позже или добавьте вручную.")
-        elif "Не удалось распознать" in err:
-            await message.answer("❌ Не удалось распознать объявление. Проверьте ссылку или добавьте вручную.")
+    except ParseError:
+        car_info = CarInfo(
+            source="auto_ria",
+            brand="AutoRia",
+            model="Ссылка",
+            year=None,
+            price=0,
+            currency="USD",
+            mileage=None,
+            location=None,
+            vin=None,
+            photos=[],
+            description=None,
+            phone=None,
+            seller_name=None,
+            phone_hidden=True,
+        )
+        lead, created = await lead_service.create_lead(car_info, url, message.from_user.id)
+        if not created:
+            status_label = STATUS_LABELS.get(lead.status, lead.status)
+            await message.answer(f"⚠️ Это авто уже в базе (статус: {status_label}).")
         else:
-            await message.answer(f"❌ Помилка парсингу: {e}")
+            await message.answer("⚠️ Не вдалося зчитати сторінку автоматично.\n✅ Посилання додано. Заповніть дані в картці вручну.")
     finally:
         await state.clear()
 
