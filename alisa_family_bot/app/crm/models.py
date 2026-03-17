@@ -1,4 +1,3 @@
-# app/crm/models.py
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, JSON, BigInteger
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
@@ -11,7 +10,7 @@ class Lead(Base):
     id = Column(Integer, primary_key=True)
     manager_id = Column(BigInteger, nullable=False, index=True)
     source = Column(String(20), nullable=False)
-    source_url = Column(Text, nullable=False)
+    source_url = Column(Text, nullable=False, unique=True)
     status = Column(String(30), default="new")
     priority = Column(Integer, default=3)
     

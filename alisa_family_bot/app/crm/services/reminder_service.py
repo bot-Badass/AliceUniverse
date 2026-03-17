@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 from datetime import datetime
+from typing import List
 
-from sqlalchemy import select, update
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import SessionLocal
-from app.crm.models import Reminder, Lead
+from app.crm.models import Reminder
+from app.db import engine
 
 
 async def create_reminder(
@@ -16,14 +15,13 @@ async def create_reminder(
     reminder_type: str,
     message: str,
 ) -> Reminder:
-    async with SessionLocal() as session:
+    async with AsyncSession(engine) as session:
         reminder = Reminder(
             lead_id=lead_id,
             manager_id=manager_id,
             remind_at=remind_at,
             reminder_type=reminder_type,
             message=message,
-            is_completed=False,
         )
         session.add(reminder)
         await session.commit()
@@ -31,54 +29,21 @@ async def create_reminder(
         return reminder
 
 
-async def get_due_reminders(now_utc: datetime) -> list[Reminder]:
-    async with SessionLocal() as session:
-        result = await session.execute(
+async def get_due_reminders(now_utc: datetime) -> List[Reminder]:
+    async with AsyncSession(engine) as session:
+        stmt = (
             select(Reminder)
-            .where(Reminder.is_completed.is_(False))
-            .where(Reminder.remind_at <= now_utc)
-            .order_by(Reminder.remind_at.asc())
+            .where(and_(Reminder.remind_at <= now_utc, Reminder.is_completed.is_(False)))
+            .order_by(Reminder.remind_at)
         )
+        result = await session.execute(stmt)
         return list(result.scalars().all())
 
 
 async def mark_reminder_completed(reminder_id: int) -> None:
-    async with SessionLocal() as session:
-        await session.execute(
-            update(Reminder)
-            .where(Reminder.id == reminder_id)
-            .values(is_completed=True, completed_at=datetime.utcnow())
-        )
-        await session.commit()
-
-
-async def update_reminder_time(reminder_id: int, new_time: datetime) -> None:
-    async with SessionLocal() as session:
-        await session.execute(
-            update(Reminder)
-            .where(Reminder.id == reminder_id)
-            .values(remind_at=new_time, is_completed=False)
-        )
-        await session.commit()
-
-
-async def get_reminder(reminder_id: int) -> Reminder | None:
-    async with SessionLocal() as session:
-        return await session.get(Reminder, reminder_id)
-
-
-async def get_lead(lead_id: int) -> Lead | None:
-    async with SessionLocal() as session:
-        return await session.get(Lead, lead_id)
-
-
-async def list_upcoming_reminders(manager_id: int, limit: int = 10) -> list[Reminder]:
-    async with SessionLocal() as session:
-        result = await session.execute(
-            select(Reminder)
-            .where(Reminder.manager_id == manager_id)
-            .where(Reminder.is_completed.is_(False))
-            .order_by(Reminder.remind_at.asc())
-            .limit(limit)
-        )
-        return list(result.scalars().all())
+    async with AsyncSession(engine) as session:
+        reminder = await session.get(Reminder, reminder_id)
+        if reminder:
+            reminder.is_completed = True
+            reminder.completed_at = datetime.utcnow()
+            await session.commit()
