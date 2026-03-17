@@ -28,6 +28,7 @@ async def stats_for_period(manager_id: int, days: int) -> dict[str, int]:
     appointments = counts.get("appointment_set", 0)
     listed = counts.get("for_sale_set", 0) + counts.get("published", 0)
     rejected = counts.get("rejected", 0)
+    thinking = counts.get("thinking", 0)
 
     return {
         "total_calls": total_calls,
@@ -35,6 +36,7 @@ async def stats_for_period(manager_id: int, days: int) -> dict[str, int]:
         "appointments": appointments,
         "listed": listed,
         "rejected": rejected,
+        "thinking": thinking,
     }
 
 

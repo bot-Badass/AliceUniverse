@@ -25,6 +25,7 @@ async def stats_handler(message: types.Message, state: FSMContext):
             f"<b>{title}</b>\n"
             f"📞 Звонков: {total}\n"
             f"✅ Успешных дозвонов: {successful} ({success_pct}%)\n"
+            f"🤔 Думает: {stats['thinking']}\n"
             f"📅 Встреч назначено: {stats['appointments']}\n"
             f"🏆 Поставлено авто: {stats['listed']}\n"
             f"❌ Отказов: {stats['rejected']}\n"

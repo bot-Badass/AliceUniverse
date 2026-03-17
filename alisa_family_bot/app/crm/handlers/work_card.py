@@ -3,7 +3,7 @@ import re
 from aiogram.types import InputMediaPhoto
 from aiogram.fsm.context import FSMContext
 from app.crm.models import Lead
-from app.crm.keyboards.card import get_work_card_keyboard, get_card_edit_keyboard, get_call_result_keyboard
+from app.crm.keyboards.card import get_work_card_keyboard, get_card_edit_keyboard, get_call_result_keyboard, get_card_edit_input_keyboard
 from app.crm.keyboards.main import get_main_crm_keyboard
 from app.crm.services import lead_service
 from app.crm.services import reminder_service
@@ -312,40 +312,42 @@ async def card_edit(callback_query: types.CallbackQuery, state: FSMContext):
     await callback_query.answer()
 
 
+
+FIELD_PROMPTS = {
+    "brand": "Введите новую марку",
+    "model": "Введите новую модель",
+    "year": "Введите новый год",
+    "price": "Введите новую цену",
+    "location": "Введите новый город",
+    "owner": "Введите новое имя владельца",
+    "phone": "Введите новый телефон",
+}
+
 @router.callback_query(F.data.startswith("cardedit:"), WorkCardStates.edit_field)
 async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContext):
     field = callback_query.data.split(":")[-1]
+    data = await state.get_data()
+    msg_id = data.get("card_message_id") or callback_query.message.message_id
+    chat_id = data.get("card_chat_id") or callback_query.message.chat.id
+
     if field == "cancel":
-        data = await state.get_data()
         lead_id = data.get("lead_id")
-        list_ids = data.get("list_ids") or []
-        list_index = data.get("list_index")
         lead = await lead_service.get_lead_by_id(int(lead_id)) if lead_id else None
         if lead:
-            has_details = bool(lead.car_description or lead.car_photos)
-            keyboard = get_work_card_keyboard(
-                with_nav=bool(list_ids and list_index is not None),
-                phone_url=None,
-                has_details=has_details,
-                show_edit=(lead.source == "olx"),
+            await show_work_card(
+                callback_query.message,
+                state,
+                lead,
+                list_ids=data.get("list_ids"),
+                list_index=data.get("list_index"),
+                list_type=data.get("list_type"),
+                replace=True,
             )
-            msg_id = data.get("card_message_id") or callback_query.message.message_id
-            chat_id = data.get("card_chat_id") or callback_query.message.chat.id
-            try:
-                await callback_query.message.bot.edit_message_reply_markup(
-                    chat_id=chat_id,
-                    message_id=msg_id,
-                    reply_markup=keyboard,
-                )
-            except TelegramBadRequest:
-                pass
         await state.set_state(WorkCardStates.in_call)
         await callback_query.answer()
         return
+
     if field == "back":
-        data = await state.get_data()
-        msg_id = data.get("card_message_id") or callback_query.message.message_id
-        chat_id = data.get("card_chat_id") or callback_query.message.chat.id
         try:
             await callback_query.message.bot.edit_message_reply_markup(
                 chat_id=chat_id,
@@ -357,9 +359,25 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
         await state.set_state(WorkCardStates.edit_field)
         await callback_query.answer()
         return
+
+    prompt = FIELD_PROMPTS.get(field, "Введите новое значение")
     await state.set_state(WorkCardStates.edit_value)
     await state.update_data(edit_field=field)
-    await callback_query.message.answer("Введи новое значение.")
+    
+    try:
+        await callback_query.message.bot.edit_message_text(
+            prompt,
+            chat_id=chat_id,
+            message_id=msg_id,
+            reply_markup=get_card_edit_input_keyboard(),
+        )
+    except TelegramBadRequest:
+        # If the message is too old to be edited, send a new one
+        await callback_query.message.answer(
+            prompt,
+            reply_markup=get_card_edit_input_keyboard(),
+        )
+
     await callback_query.answer()
 
 
@@ -367,15 +385,49 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
 async def card_edit_value(message: types.Message, state: FSMContext):
     if not is_primary_super_admin(message.from_user.id if message.from_user else None):
         return
+    
+    # Delete the user's message with the new value
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass
+
     data = await state.get_data()
     field = data.get("edit_field")
     lead_id = data.get("lead_id")
     if not field or not lead_id:
-        await message.answer("Карточка не активна.")
+        # Revert to the main edit menu if something is wrong
+        msg_id = data.get("card_message_id")
+        chat_id = data.get("card_chat_id")
+        if msg_id and chat_id:
+            try:
+                await message.bot.edit_message_text(
+                    "Что-то пошло не так. Попробуйте еще раз.",
+                    chat_id=chat_id,
+                    message_id=msg_id,
+                    reply_markup=get_card_edit_keyboard(),
+                )
+            except TelegramBadRequest:
+                pass
+        await state.set_state(WorkCardStates.edit_field)
         return
+
     if not message.text:
-        await message.answer("Нужно значение текстом.")
+        # Inform the user that they need to send text
+        msg_id = data.get("card_message_id")
+        chat_id = data.get("card_chat_id")
+        if msg_id and chat_id:
+            try:
+                await message.bot.edit_message_text(
+                    "Нужно значение текстом. Попробуйте еще раз.",
+                    chat_id=chat_id,
+                    message_id=msg_id,
+                    reply_markup=get_card_edit_input_keyboard(),
+                )
+            except TelegramBadRequest:
+                pass # The message will be reverted on the next valid input
         return
+
     value = message.text.strip()
     fields = {}
     if field == "year" and value.isdigit():
@@ -398,22 +450,38 @@ async def card_edit_value(message: types.Message, state: FSMContext):
 
     if fields:
         await lead_service.update_lead_fields(int(lead_id), **fields)
-        data = await state.get_data()
-        msg_id = data.get("card_message_id")
-        chat_id = data.get("card_chat_id")
-        if msg_id and chat_id:
-            try:
-                await message.bot.edit_message_reply_markup(
-                    chat_id=chat_id,
-                    message_id=msg_id,
-                    reply_markup=get_card_edit_keyboard(),
-                )
-            except TelegramBadRequest:
-                pass
-        await message.answer("✅ Данные обновлены. Можешь выбрать следующее поле.")
-    else:
-        await message.answer("Не удалось обновить поле.")
+    
+    # Always show the card and return to the edit menu
+    lead = await lead_service.get_lead_by_id(int(lead_id))
+    if lead:
+        # Create a temporary message object to pass to show_work_card
+        # This is needed because we deleted the user's message
+        temp_message = types.Message(message_id=data.get("card_message_id"), chat=types.Chat(id=data.get("card_chat_id"), type="private"), from_user=message.from_user)
+        await show_work_card(
+            temp_message,
+            state,
+            lead,
+            list_ids=data.get("list_ids"),
+            list_index=data.get("list_index"),
+            list_type=data.get("list_type"),
+            replace=True,
+        )
+    
+    # After showing the card, switch back to the edit keyboard
+    msg_id = data.get("card_message_id")
+    chat_id = data.get("card_chat_id")
+    if msg_id and chat_id:
+        try:
+            await message.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=msg_id,
+                reply_markup=get_card_edit_keyboard(),
+            )
+        except TelegramBadRequest:
+            pass
+
     await state.set_state(WorkCardStates.edit_field)
+
 
 
 @router.callback_query(F.data.startswith("card:status:"))
