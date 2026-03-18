@@ -10,7 +10,7 @@ crm_router = Router()
 crm_router.include_router(add_lead.router)
 crm_router.include_router(pipeline.router)
 crm_router.include_router(work_card.router)
-crm_router.include_router(reminders.router)
+# crm_router.include_router(reminders.router)  # no router in reminders.py
 crm_router.include_router(sales.router)
 crm_router.include_router(search.router)
 crm_router.include_router(stats.router)

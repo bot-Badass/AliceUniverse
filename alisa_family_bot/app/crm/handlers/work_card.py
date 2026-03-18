@@ -169,9 +169,9 @@ async def show_work_card(
     if replace:
         try:
             await bot_instance.edit_message_text(
-                text,
                 chat_id=message.chat.id,
                 message_id=message.message_id,
+                text=text,
                 reply_markup=keyboard,
                 parse_mode="HTML",
                 disable_web_page_preview=True,
@@ -182,7 +182,7 @@ async def show_work_card(
             pass
     sent = await bot_instance.send_message(
         chat_id=message.chat.id,
-        text,
+        text=text,
         reply_markup=keyboard,
         parse_mode="HTML",
         disable_web_page_preview=True,
@@ -344,11 +344,10 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
                 callback_query.message,
                 state,
                 lead,
-                list_ids=data.get("list_ids"),
-                list_index=data.get("list_index"),
-                list_type=data.get("list_type"),
-                replace=True,
-            )
+        list_ids=data.get("list_ids"),
+        list_index=data.get("list_index"),
+        list_type=data.get("list_type"), replace=True,
+    )
         await state.set_state(WorkCardStates.in_call)
         await callback_query.answer()
         return
