@@ -24,15 +24,25 @@ async def stats_for_period(manager_id: int, days: int) -> dict[str, int]:
     total_calls = sum(counts.values())
     no_answer = counts.get("no_answer", 0)
     invalid_phone = counts.get("invalid_phone", 0)
-    successful_calls = max(total_calls - no_answer - invalid_phone, 0)
+    thinking = counts.get("thinking", 0)
+    callback_scheduled = counts.get("callback_scheduled", 0)
+    note = counts.get("note", 0)
+
+    # Successful calls are ones that reached a conclusion, excluding intermediate steps
+    successful_calls = max(
+        total_calls
+        - no_answer
+        - invalid_phone
+        - thinking
+        - callback_scheduled
+        - note,
+        0,
+    )
     appointments = counts.get("appointment_set", 0)
     listed = counts.get("for_sale_set", 0) + counts.get("published", 0)
     rejected = counts.get("rejected", 0)
-    thinking = counts.get("thinking", 0)
-    callback_scheduled = counts.get("callback_scheduled", 0)
     sold = counts.get("sold", 0)
     returned = counts.get("returned", 0)
-    note = counts.get("note", 0)
 
 
     return {

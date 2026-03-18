@@ -354,6 +354,19 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
         return
 
     if field == "back":
+        lead_id = data.get("lead_id")
+        lead = await lead_service.get_lead_by_id(int(lead_id)) if lead_id else None
+        if lead:
+            await show_work_card(
+                callback_query.message,
+                state,
+                lead,
+                list_ids=data.get("list_ids"),
+                list_index=data.get("list_index"),
+                list_type=data.get("list_type"),
+                replace=True,
+            )
+
         try:
             await callback_query.message.bot.edit_message_reply_markup(
                 chat_id=chat_id,
@@ -362,6 +375,7 @@ async def card_edit_choose(callback_query: types.CallbackQuery, state: FSMContex
             )
         except TelegramBadRequest:
             pass
+
         await state.set_state(WorkCardStates.edit_field)
         await callback_query.answer()
         return
@@ -466,7 +480,7 @@ async def card_edit_value(message: types.Message, state: FSMContext):
             message_id=data.get("card_message_id"),
             chat=types.Chat(id=data.get("card_chat_id"), type="private"),
             from_user=message.from_user,
-            date=datetime.now(timezone.utc)
+            date=message.date
         )
         await show_work_card(
             temp_message,
