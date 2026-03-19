@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List
 
 from sqlalchemy import select, and_
@@ -46,20 +46,17 @@ async def mark_reminder_completed(reminder_id: int) -> None:
             await session.commit()
 
 async def get_user_reminders(manager_id: int) -> List[Reminder]:
-    #\"\"\"Get active (not completed) reminders for specific manager.\"\"\"
-    now_utc = datetime.utcnow()
-    fifteen_min_early = now_utc + timedelta(minutes=15)
+    # Get all active (not completed) reminders for user, sorted by time
     async with AsyncSession(engine) as session:
         stmt = (
             select(Reminder)
             .where(
                 and_(
                     Reminder.manager_id == manager_id,
-                    Reminder.is_completed.is_(False),
-                    Reminder.remind_at <= fifteen_min_early
+                    Reminder.is_completed.is_(False)
                 )
             )
-            .order_by(Reminder.remind_at)
+            .order_by(Reminder.remind_at.asc())
         )
         result = await session.execute(stmt)
         return list(result.scalars().all())

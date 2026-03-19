@@ -21,7 +21,7 @@ async def reminders_menu(message: Message, state: FSMContext):
         parse_mode="HTML"
     )
 
-@router.callback_query(F.data.startswith("crm_reminders:list"))
+@router.callback_query(F.data == "crm_reminders:list")
 async def reminders_list(callback: CallbackQuery, state: FSMContext):
     # Show user's reminders list
     manager_id = callback.from_user.id
@@ -49,16 +49,27 @@ async def reminders_list(callback: CallbackQuery, state: FSMContext):
     
     try:
         await callback.message.edit_text(
-            text + "\n<i>Напоминания за 15 мин до времени</i>",
+            text + "\n<i>Активные напоминания (не завершенные)</i>",
             reply_markup=kb.as_markup(),
             parse_mode="HTML"
         )
     except:
         await callback.message.answer(
-            text + "\n<i>Напоминания за 15 мин до времени</i>",
+            text + "\n<i>Активные напоминания (не завершенные)</i>",
             reply_markup=kb.as_markup(),
             parse_mode="HTML"
         )
+    await callback.answer()
+
+@router.callback_query(F.data == "crm_reminders:menu")
+async def reminders_back_menu(callback: CallbackQuery, state: FSMContext):
+    # Back to reminders menu
+    await callback.message.edit_text(
+        "🔔 <b>Напоминания</b>\n\n"
+        "Выберите действие:",
+        reply_markup=get_reminders_keyboard(),
+        parse_mode="HTML"
+    )
     await callback.answer()
 
 async def send_reminder(bot: Bot, reminder: Reminder) -> None:
