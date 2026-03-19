@@ -19,5 +19,8 @@ CLOSED_STATUSES = {
     "invalid_phone",
 }
 
-
 ALLOWED_STATUSES = set(STATUS_LABELS.keys())
+
+class CALLBACK_PREFIXES:
+    crm_reminders = "crm_reminders"
+    crm_main = "crm:main"
